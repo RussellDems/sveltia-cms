@@ -537,6 +537,7 @@ map_lat_lng: 緯度 {$latitude}、経度 {$longitude} の地図
 remove_this_item: このアイテムを削除
 move_up: 上へ移動
 move_down: 下へ移動
+drag_to_sort: ドラッグして並べ替え
 add_x: "{$name} を追加"
 add_item_above: 上にアイテムを追加
 add_item_below: 下にアイテムを追加
@@ -589,6 +590,15 @@ character_counter:
 youtube_video_player: YouTube 動画プレーヤー
 today: 今日
 now: 現在時刻
+date_picker:
+  select_date: 日付を選択
+  select_time: 時刻を選択
+  previous_month: 前の月
+  next_month: 次の月
+  previous_year: 前の年
+  next_year: 次の年
+  hour: 時
+  minute: 分
 editor_components:
   image: 画像
   src: ソース

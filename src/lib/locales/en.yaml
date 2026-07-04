@@ -635,6 +635,7 @@ map_lat_lng: Map showing latitude {$latitude}, longitude {$longitude}
 remove_this_item: Remove This Item
 move_up: Move Up
 move_down: Move Down
+drag_to_sort: Drag to Sort
 add_x: Add {$name}
 add_item_above: Add Item Above
 add_item_below: Add Item Below
@@ -690,6 +691,15 @@ character_counter:
 youtube_video_player: YouTube video player
 today: Today
 now: Now
+date_picker:
+  select_date: Select Date
+  select_time: Select Time
+  previous_month: Previous Month
+  next_month: Next Month
+  previous_year: Previous Year
+  next_year: Next Year
+  hour: Hour
+  minute: Minute
 editor_components:
   image: Image
   src: Source

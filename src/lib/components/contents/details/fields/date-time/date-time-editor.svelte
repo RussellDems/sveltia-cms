@@ -7,9 +7,11 @@
 -->
 <script>
   import { _ } from '@sveltia/i18n';
-  import { Button } from '@sveltia/ui';
+  import { Button, Icon } from '@sveltia/ui';
   import { untrack } from 'svelte';
 
+  import DatePicker from '$lib/components/contents/details/fields/date-time/date-picker.svelte';
+  import TimePicker from '$lib/components/contents/details/fields/date-time/time-picker.svelte';
   import { parseDateTimeConfig } from '$lib/services/contents/fields/date-time/config';
   import {
     getCurrentDateTime,
@@ -107,6 +109,49 @@
     });
   });
 
+  /** Date part (`YYYY-MM-DD`) of the current input value, if any. */
+  const datePart = $derived(type === 'time' ? '' : (inputValue?.split('T')[0] ?? ''));
+  /** Time part (`HH:mm`) of the current input value, if any. */
+  const timePart = $derived(
+    type === 'time' ? inputValue.slice(0, 5) : (inputValue?.split('T')[1]?.slice(0, 5) ?? ''),
+  );
+  /** Minute step for the time picker, derived from the field’s `step` option (in seconds). */
+  const minuteStep = $derived(
+    typeof step === 'number' && Number.isInteger(step / 60) && step / 60 >= 1 && step / 60 <= 30
+      ? step / 60
+      : 1,
+  );
+
+  /**
+   * Update the date part of {@link inputValue}, preserving the time part. If the field also has a
+   * time and no time is set yet, fall back to the current time.
+   * @param {string} newDate New date in `YYYY-MM-DD` format.
+   */
+  const setDatePart = (newDate) => {
+    if (type === 'date') {
+      inputValue = newDate;
+    } else {
+      const fallbackTime = getCurrentDateTime(fieldConfig, timeZone).split('T')[1] ?? '00:00';
+
+      inputValue = `${newDate}T${timePart || fallbackTime}`;
+    }
+  };
+
+  /**
+   * Update the time part of {@link inputValue}, preserving the date part. If the field also has a
+   * date and no date is set yet, fall back to the current date.
+   * @param {string} newTime New time in `HH:mm` format.
+   */
+  const setTimePart = (newTime) => {
+    if (type === 'time') {
+      inputValue = newTime;
+    } else {
+      const fallbackDate = getCurrentDateTime(fieldConfig, timeZone).split('T')[0];
+
+      inputValue = `${datePart || fallbackDate}T${newTime}`;
+    }
+  };
+
   /**
    * Handle input focus event.
    */
@@ -137,6 +182,36 @@
     onfocus={handleFocus}
     onblur={handleBlur}
   />
+  {#if !readonly && type !== 'time'}
+    <Button
+      iconic
+      variant="ghost"
+      aria-label={_('date_picker.select_date')}
+      popupPosition="bottom-left"
+    >
+      {#snippet startIcon()}
+        <Icon name="calendar_month" />
+      {/snippet}
+      {#snippet popup()}
+        <DatePicker value={datePart} {min} {max} onSelect={setDatePart} />
+      {/snippet}
+    </Button>
+  {/if}
+  {#if !readonly && type !== 'date'}
+    <Button
+      iconic
+      variant="ghost"
+      aria-label={_('date_picker.select_time')}
+      popupPosition="bottom-left"
+    >
+      {#snippet startIcon()}
+        <Icon name="schedule" />
+      {/snippet}
+      {#snippet popup()}
+        <TimePicker value={timePart} {minuteStep} onSelect={setTimePart} />
+      {/snippet}
+    </Button>
+  {/if}
   {#if !readonly}
     <Button
       variant="tertiary"

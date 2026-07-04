@@ -81,6 +81,10 @@
   let pendingFiles = $state([]);
   /** @type {Asset[]} */
   let unsavedAssets = $state([]);
+  /** Index of the item currently being dragged for sorting, or `-1` if none. */
+  let draggingIndex = $state(-1);
+  /** Index of the item currently targeted as the drop position, or `-1` if none. */
+  let dropTargetIndex = $state(-1);
 
   const {
     widget: fieldType,
@@ -316,6 +320,34 @@
     ];
   };
 
+  /**
+   * Move an item to an arbitrary position in the list. Used for drag & drop sorting.
+   * @param {number} fromIndex Index of the item to move.
+   * @param {number} toIndex Index of the new position.
+   */
+  const moveItem = (fromIndex, toIndex) => {
+    if (!$entryDraft || fromIndex === toIndex || !Array.isArray(currentValue)) {
+      return;
+    }
+
+    const values = [...currentValue];
+    const [moved] = values.splice(fromIndex, 1);
+
+    values.splice(toIndex, 0, moved);
+
+    values.forEach((value, index) => {
+      $entryDraft.currentValues[locale][`${keyPath}.${index}`] = value;
+    });
+  };
+
+  /**
+   * Reset the drag & drop sorting state.
+   */
+  const resetDragState = () => {
+    draggingIndex = -1;
+    dropTargetIndex = -1;
+  };
+
   $effect(() => {
     (async () => {
       if ($entryDraft?.files) {
@@ -353,6 +385,24 @@
               {...itemArgs}
               {value}
               fieldId="{fieldId}-{index}"
+              dragging={draggingIndex === index}
+              dropTarget={dropTargetIndex === index && draggingIndex !== index}
+              onDragStart={() => {
+                draggingIndex = index;
+              }}
+              onDragEnter={() => {
+                if (draggingIndex > -1) {
+                  dropTargetIndex = index;
+                }
+              }}
+              onDragDrop={() => {
+                if (draggingIndex > -1) {
+                  moveItem(draggingIndex, index);
+                }
+
+                resetDragState();
+              }}
+              onDragEnd={resetDragState}
               onReplace={() => {
                 replaceMode = true;
                 replaceIndex = index;

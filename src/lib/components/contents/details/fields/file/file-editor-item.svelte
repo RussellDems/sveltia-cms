@@ -32,6 +32,12 @@
    * @property {() => void} [onRemove] Event handler for remove action.
    * @property {() => void} [onMoveUp] Event handler for move up action.
    * @property {() => void} [onMoveDown] Event handler for move down action.
+   * @property {boolean} [dragging] Whether the item is currently being dragged for sorting.
+   * @property {boolean} [dropTarget] Whether the item is currently targeted as a drop position.
+   * @property {() => void} [onDragStart] Event handler fired when the item starts being dragged.
+   * @property {() => void} [onDragEnter] Event handler fired when a dragged item enters this item.
+   * @property {() => void} [onDragDrop] Event handler fired when a dragged item is dropped here.
+   * @property {() => void} [onDragEnd] Event handler fired when a drag operation ends.
    */
 
   /** @type {Props} */
@@ -50,7 +56,18 @@
     onRemove,
     onMoveUp,
     onMoveDown,
+    dragging = false,
+    dropTarget = false,
+    onDragStart,
+    onDragEnter,
+    onDragDrop,
+    onDragEnd,
   } = $props();
+
+  /** Whether the item can be sorted via drag & drop. */
+  const sortable = $derived(!!(onMoveUp || onMoveDown) && !readonly && !!onDragStart);
+  /** Whether the drag handle is currently pressed, enabling the HTML5 drag behavior. */
+  let dragArmed = $state(false);
 
   /** @type {Asset | undefined} */
   let asset = $state();
@@ -152,10 +169,65 @@
   });
 </script>
 
-<div role="none" class="filled">
+<div
+  role="none"
+  class="filled"
+  class:dragging
+  class:drop-target={dropTarget}
+  draggable={sortable && dragArmed}
+  ondragstart={(event) => {
+    if (!sortable || !dragArmed) {
+      event.preventDefault();
+
+      return;
+    }
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      // Set dummy data so dragging works in Firefox
+      event.dataTransfer.setData('text/plain', '');
+    }
+
+    onDragStart?.();
+  }}
+  ondragenter={(event) => {
+    event.preventDefault();
+    onDragEnter?.();
+  }}
+  ondragover={(event) => {
+    event.preventDefault();
+
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }}
+  ondrop={(event) => {
+    event.preventDefault();
+    dragArmed = false;
+    onDragDrop?.();
+  }}
+  ondragend={() => {
+    dragArmed = false;
+    onDragEnd?.();
+  }}
+>
   {#if (onMoveUp || onMoveDown) && !readonly}
-    <!-- @todo Support drag & drop sorting -->
     <div role="toolbar" class="reorder-controls">
+      {#if sortable}
+        <span
+          role="none"
+          class="drag-handle"
+          title={_('drag_to_sort')}
+          onpointerdown={() => {
+            dragArmed = true;
+          }}
+          onpointerup={() => {
+            dragArmed = false;
+          }}
+        >
+          <Icon name="drag_indicator" />
+        </span>
+      {/if}
       <Button
         size="small"
         iconic
@@ -246,6 +318,27 @@
     align-items: center;
     gap: 12px;
     margin: var(--sui-focus-ring-width);
+
+    &.dragging {
+      opacity: 0.5;
+    }
+
+    &.drop-target {
+      box-shadow: 0 calc(var(--sui-focus-ring-width) * -1) 0 0 var(--sui-primary-accent-color);
+    }
+
+    :global(.drag-handle) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--sui-secondary-foreground-color);
+      cursor: grab;
+      touch-action: none;
+
+      &:active {
+        cursor: grabbing;
+      }
+    }
 
     :global {
       .preview {

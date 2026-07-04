@@ -1,0 +1,814 @@
+diff --git a/src/lib/components/contents/details/fields/date-time/date-picker.svelte b/src/lib/components/contents/details/fields/date-time/date-picker.svelte
+new file mode 100644
+index 0000000..c9c2f43
+--- /dev/null
++++ b/src/lib/components/contents/details/fields/date-time/date-picker.svelte
+@@ -0,0 +1,290 @@
++<!--
++  @component
++  A visual calendar date picker rendered in a popup for the DateTime field editor. Modeled on the
++  `Calendar` component in `@sveltia/ui`, with working month/year navigation and selection state.
++  Operates on a plain `YYYY-MM-DD` string; time zone handling is left to the field editor.
++-->
++<script>
++  import { _, isRTL } from '@sveltia/i18n';
++  import { Button, Icon } from '@sveltia/ui';
++  import { untrack } from 'svelte';
++
++  /**
++   * @typedef {object} Props
++   * @property {string} [value] Selected date in `YYYY-MM-DD` format. Empty if none.
++   * @property {string} [min] Minimum selectable date in `YYYY-MM-DD` format.
++   * @property {string} [max] Maximum selectable date in `YYYY-MM-DD` format.
++   * @property {(value: string) => void} [onSelect] Custom `Select` event handler called with the
++   * new date in `YYYY-MM-DD` format when a day is picked.
++   */
++
++  /** @type {Props} */
++  let {
++    /* eslint-disable prefer-const */
++    value = '',
++    min = undefined,
++    max = undefined,
++    onSelect = undefined,
++    /* eslint-enable prefer-const */
++  } = $props();
++
++  /**
++   * List of month names for the header label. Use a fixed date to avoid issues with daylight
++   * saving time.
++   */
++  const MONTH_NAMES = Array.from({ length: 12 }, (__, i) =>
++    new Date(2000, i, 10).toLocaleDateString(undefined, { month: 'short' }),
++  );
++
++  const now = new Date();
++  const today = $derived(
++    [now.getFullYear(), now.getMonth() + 1, now.getDate()]
++      .map((n, i) => String(n).padStart(i ? 2 : 4, '0'))
++      .join('-'),
++  );
++
++  /**
++   * Parse a `YYYY-MM-DD` string into year/month/day numbers.
++   * @param {string} dateStr Date string.
++   * @returns {[number, number, number] | undefined} Year, month (0–11) and day, or `undefined` if
++   * the string cannot be parsed.
++   */
++  const parseDate = (dateStr) => {
++    const match = dateStr?.match(/^(\d{4})-(\d{2})-(\d{2})/);
++
++    return match
++      ? [Number(match[1]), Number(match[2]) - 1, Number(match[3])]
++      : undefined;
++  };
++
++  /**
++   * Format year/month/day numbers as a `YYYY-MM-DD` string.
++   * @param {number} year Full year.
++   * @param {number} month Month index (0–11).
++   * @param {number} day Day of the month.
++   * @returns {string} Formatted date.
++   */
++  const formatDate = (year, month, day) =>
++    `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(
++      day,
++    ).padStart(2, '0')}`;
++
++  /** Year currently shown in the calendar view. */
++  let viewYear = $state(now.getFullYear());
++  /** Month index (0–11) currently shown in the calendar view. */
++  let viewMonth = $state(now.getMonth());
++
++  $effect(() => {
++    // Keep the calendar view in sync with the selected date, e.g. when the user edits the date in
++    // the text input while the picker is mounted
++    const parsed = parseDate(value);
++
++    if (parsed) {
++      untrack(() => {
++        [viewYear, viewMonth] = parsed;
++      });
++    }
++  });
++
++  const dayGrid = $derived.by(() => {
++    const firstOfMonth = new Date(viewYear, viewMonth, 1);
++    // Start the grid on the Sunday on or before the 1st of the month. The cursor is local to this
++    // computation and doesn’t need to be reactive.
++    // eslint-disable-next-line svelte/prefer-svelte-reactivity
++    const cursor = new Date(viewYear, viewMonth, 1 - firstOfMonth.getDay());
++
++    return Array.from({ length: 42 }, () => {
++      const date = formatDate(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
++
++      const cell = {
++        date,
++        label: cursor.getDate(),
++        otherMonth: cursor.getMonth() !== viewMonth,
++        disabled: (!!min && date < min.slice(0, 10)) || (!!max && date > max.slice(0, 10)),
++      };
++
++      cursor.setDate(cursor.getDate() + 1);
++
++      return cell;
++    });
++  });
++
++  const weekdayLabels = $derived(
++    dayGrid.slice(0, 7).map(({ date }) => {
++      const [year, month, day] = /** @type {[number, number, number]} */ (parseDate(date));
++
++      return new Date(year, month, day).toLocaleDateString(undefined, { weekday: 'narrow' });
++    }),
++  );
++
++  /**
++   * Move the calendar view by the given number of months.
++   * @param {number} delta Number of months to move. Negative to go back.
++   */
++  const moveMonth = (delta) => {
++    const date = new Date(viewYear, viewMonth + delta, 1);
++
++    viewYear = date.getFullYear();
++    viewMonth = date.getMonth();
++  };
++</script>
++
++<div role="group" class="date-picker" aria-label={_('date_picker.select_date')}>
++  <div role="none" class="header">
++    <Button
++      iconic
++      size="small"
++      aria-label={_('date_picker.previous_year')}
++      onclick={() => {
++        viewYear -= 1;
++      }}
++    >
++      <Icon name={isRTL() ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} />
++    </Button>
++    <Button
++      iconic
++      size="small"
++      aria-label={_('date_picker.previous_month')}
++      onclick={() => {
++        moveMonth(-1);
++      }}
++    >
++      <Icon name={isRTL() ? 'chevron_right' : 'chevron_left'} />
++    </Button>
++    <div role="none" class="view-label">{MONTH_NAMES[viewMonth]} {viewYear}</div>
++    <Button
++      iconic
++      size="small"
++      aria-label={_('date_picker.next_month')}
++      onclick={() => {
++        moveMonth(1);
++      }}
++    >
++      <Icon name={isRTL() ? 'chevron_left' : 'chevron_right'} />
++    </Button>
++    <Button
++      iconic
++      size="small"
++      aria-label={_('date_picker.next_year')}
++      onclick={() => {
++        viewYear += 1;
++      }}
++    >
++      <Icon name={isRTL() ? 'keyboard_double_arrow_left' : 'keyboard_double_arrow_right'} />
++    </Button>
++  </div>
++  <div role="listbox" class="grid">
++    {#each weekdayLabels as label, index (index)}
++      <div role="none" class="weekday">{label}</div>
++    {/each}
++    {#each dayGrid as { date, label, otherMonth, disabled } (date)}
++      <div
++        role="none"
++        class:other-month={otherMonth}
++        class:today={date === today}
++        class:selected={date === value.slice(0, 10)}
++      >
++        <Button
++          role="option"
++          {disabled}
++          aria-selected={date === value.slice(0, 10)}
++          onclick={() => {
++            onSelect?.(date);
++          }}
++        >
++          {label}
++        </Button>
++      </div>
++    {/each}
++  </div>
++  <div role="none" class="footer">
++    <Button
++      variant="tertiary"
++      size="small"
++      role="option"
++      label={_('today')}
++      onclick={() => {
++        onSelect?.(today);
++      }}
++    />
++  </div>
++</div>
++
++<style>
++  .date-picker {
++    display: inline-flex;
++    flex-direction: column;
++    gap: 8px;
++    padding: 8px;
++    -webkit-user-select: none;
++    user-select: none;
++    cursor: default;
++
++    & > * {
++      flex: none;
++    }
++  }
++
++  .header {
++    display: flex;
++    gap: 4px;
++    align-items: center;
++
++    .view-label {
++      flex: auto;
++      text-align: center;
++      font-size: var(--sui-font-size-small);
++      font-weight: var(--sui-font-weight-bold, 600);
++    }
++  }
++
++  .footer {
++    display: flex;
++    justify-content: center;
++  }
++
++  .grid {
++    display: grid !important;
++    grid-template-columns: repeat(7, 28px);
++    gap: 2px;
++
++    div {
++      display: flex;
++      justify-content: center;
++      align-items: center;
++      width: 28px;
++      height: 28px;
++      font-size: var(--sui-font-size-small);
++
++      &.weekday {
++        color: var(--sui-secondary-foreground-color);
++      }
++
++      &.other-month {
++        color: var(--sui-tertiary-foreground-color);
++      }
++
++      &.today :global(button) {
++        border-width: 1px;
++        border-color: var(--sui-primary-accent-color);
++      }
++
++      &.selected :global(button) {
++        color: var(--sui-highlight-foreground-color, #fff);
++        background-color: var(--sui-primary-accent-color);
++      }
++
++      :global(button) {
++        justify-content: center;
++        margin: 0 !important;
++        width: 100%;
++        height: 28px;
++        border-radius: 50%;
++      }
++
++      :global(button:hover) {
++        background-color: var(--sui-hover-background-color);
++      }
++    }
++  }
++</style>
+diff --git a/src/lib/components/contents/details/fields/date-time/date-time-editor.svelte b/src/lib/components/contents/details/fields/date-time/date-time-editor.svelte
+index 3b02e85..b3c8679 100644
+--- a/src/lib/components/contents/details/fields/date-time/date-time-editor.svelte
++++ b/src/lib/components/contents/details/fields/date-time/date-time-editor.svelte
+@@ -7,9 +7,11 @@
+ -->
+ <script>
+   import { _ } from '@sveltia/i18n';
+-  import { Button } from '@sveltia/ui';
++  import { Button, Icon } from '@sveltia/ui';
+   import { untrack } from 'svelte';
+ 
++  import DatePicker from '$lib/components/contents/details/fields/date-time/date-picker.svelte';
++  import TimePicker from '$lib/components/contents/details/fields/date-time/time-picker.svelte';
+   import { parseDateTimeConfig } from '$lib/services/contents/fields/date-time/config';
+   import {
+     getCurrentDateTime,
+@@ -107,6 +109,49 @@
+     });
+   });
+ 
++  /** Date part (`YYYY-MM-DD`) of the current input value, if any. */
++  const datePart = $derived(type === 'time' ? '' : (inputValue?.split('T')[0] ?? ''));
++  /** Time part (`HH:mm`) of the current input value, if any. */
++  const timePart = $derived(
++    type === 'time' ? inputValue.slice(0, 5) : (inputValue?.split('T')[1]?.slice(0, 5) ?? ''),
++  );
++  /** Minute step for the time picker, derived from the field’s `step` option (in seconds). */
++  const minuteStep = $derived(
++    typeof step === 'number' && Number.isInteger(step / 60) && step / 60 >= 1 && step / 60 <= 30
++      ? step / 60
++      : 1,
++  );
++
++  /**
++   * Update the date part of {@link inputValue}, preserving the time part. If the field also has a
++   * time and no time is set yet, fall back to the current time.
++   * @param {string} newDate New date in `YYYY-MM-DD` format.
++   */
++  const setDatePart = (newDate) => {
++    if (type === 'date') {
++      inputValue = newDate;
++    } else {
++      const fallbackTime = getCurrentDateTime(fieldConfig, timeZone).split('T')[1] ?? '00:00';
++
++      inputValue = `${newDate}T${timePart || fallbackTime}`;
++    }
++  };
++
++  /**
++   * Update the time part of {@link inputValue}, preserving the date part. If the field also has a
++   * date and no date is set yet, fall back to the current date.
++   * @param {string} newTime New time in `HH:mm` format.
++   */
++  const setTimePart = (newTime) => {
++    if (type === 'time') {
++      inputValue = newTime;
++    } else {
++      const fallbackDate = getCurrentDateTime(fieldConfig, timeZone).split('T')[0];
++
++      inputValue = `${datePart || fallbackDate}T${newTime}`;
++    }
++  };
++
+   /**
+    * Handle input focus event.
+    */
+@@ -137,6 +182,36 @@
+     onfocus={handleFocus}
+     onblur={handleBlur}
+   />
++  {#if !readonly && type !== 'time'}
++    <Button
++      iconic
++      variant="ghost"
++      aria-label={_('date_picker.select_date')}
++      popupPosition="bottom-left"
++    >
++      {#snippet startIcon()}
++        <Icon name="calendar_month" />
++      {/snippet}
++      {#snippet popup()}
++        <DatePicker value={datePart} {min} {max} onSelect={setDatePart} />
++      {/snippet}
++    </Button>
++  {/if}
++  {#if !readonly && type !== 'date'}
++    <Button
++      iconic
++      variant="ghost"
++      aria-label={_('date_picker.select_time')}
++      popupPosition="bottom-left"
++    >
++      {#snippet startIcon()}
++        <Icon name="schedule" />
++      {/snippet}
++      {#snippet popup()}
++        <TimePicker value={timePart} {minuteStep} onSelect={setTimePart} />
++      {/snippet}
++    </Button>
++  {/if}
+   {#if !readonly}
+     <Button
+       variant="tertiary"
+diff --git a/src/lib/components/contents/details/fields/date-time/time-picker.svelte b/src/lib/components/contents/details/fields/date-time/time-picker.svelte
+new file mode 100644
+index 0000000..d0a301d
+--- /dev/null
++++ b/src/lib/components/contents/details/fields/date-time/time-picker.svelte
+@@ -0,0 +1,144 @@
++<!--
++  @component
++  A visual time picker rendered in a popup for the DateTime field editor. Shows scrollable hour and
++  minute columns. Picking an hour keeps the popup open; picking a minute closes it (via the
++  `option` role handled by the popup service). Operates on a plain `HH:mm` string; time zone
++  handling is left to the field editor.
++-->
++<script>
++  import { _ } from '@sveltia/i18n';
++  import { Button } from '@sveltia/ui';
++
++  /**
++   * @typedef {object} Props
++   * @property {string} [value] Selected time in `HH:mm` format. Empty if none.
++   * @property {number} [minuteStep] Step between selectable minutes. Defaults to 1.
++   * @property {(value: string) => void} [onSelect] Custom `Select` event handler called with the
++   * new time in `HH:mm` format when an hour or minute is picked.
++   */
++
++  /** @type {Props} */
++  let {
++    /* eslint-disable prefer-const */
++    value = '',
++    minuteStep = 1,
++    onSelect = undefined,
++    /* eslint-enable prefer-const */
++  } = $props();
++
++  const HOURS = Array.from({ length: 24 }, (__, i) => String(i).padStart(2, '0'));
++  const minutes = $derived(
++    Array.from({ length: Math.ceil(60 / minuteStep) }, (__, i) =>
++      String(i * minuteStep).padStart(2, '0'),
++    ),
++  );
++
++  const selectedHour = $derived(value.match(/^(\d{2}):/)?.[1] ?? '');
++  const selectedMinute = $derived(value.match(/^\d{2}:(\d{2})/)?.[1] ?? '');
++
++  /** @type {HTMLElement | undefined} */
++  let hourColumn = $state();
++  /** @type {HTMLElement | undefined} */
++  let minuteColumn = $state();
++
++  /**
++   * Scroll the selected item in a column into view, centered.
++   * @param {HTMLElement | undefined} column Column element.
++   */
++  const scrollToSelected = (column) => {
++    const selected = /** @type {HTMLElement | null} */ (
++      column?.querySelector('[aria-selected="true"]')
++    );
++
++    if (column && selected) {
++      column.scrollTop = selected.offsetTop - column.clientHeight / 2 + selected.clientHeight / 2;
++    }
++  };
++
++  $effect(() => {
++    scrollToSelected(hourColumn);
++    scrollToSelected(minuteColumn);
++  });
++</script>
++
++<div role="group" class="time-picker" aria-label={_('date_picker.select_time')}>
++  <div role="none" class="columns">
++    <div role="listbox" class="column" aria-label={_('date_picker.hour')} bind:this={hourColumn}>
++      {#each HOURS as hour (hour)}
++        <Button
++          aria-selected={hour === selectedHour}
++          class={hour === selectedHour ? 'selected' : ''}
++          onclick={() => {
++            onSelect?.(`${hour}:${selectedMinute || '00'}`);
++          }}
++        >
++          {hour}
++        </Button>
++      {/each}
++    </div>
++    <div
++      role="listbox"
++      class="column"
++      aria-label={_('date_picker.minute')}
++      bind:this={minuteColumn}
++    >
++      {#each minutes as minute (minute)}
++        <Button
++          role="option"
++          aria-selected={minute === selectedMinute}
++          class={minute === selectedMinute ? 'selected' : ''}
++          onclick={() => {
++            onSelect?.(`${selectedHour || '00'}:${minute}`);
++          }}
++        >
++          {minute}
++        </Button>
++      {/each}
++    </div>
++  </div>
++</div>
++
++<style>
++  .time-picker {
++    display: inline-flex;
++    padding: 8px;
++    -webkit-user-select: none;
++    user-select: none;
++    cursor: default;
++  }
++
++  .columns {
++    display: flex;
++    gap: 4px;
++  }
++
++  .column {
++    display: flex;
++    flex-direction: column;
++    gap: 2px;
++    height: 200px;
++    overflow-y: auto;
++    scrollbar-width: thin;
++    padding: 2px;
++
++    :global(button) {
++      flex: none;
++      justify-content: center;
++      margin: 0 !important;
++      width: 40px;
++      height: 28px;
++      border-radius: var(--sui-control-medium-border-radius, 4px);
++      font-size: var(--sui-font-size-small);
++      font-variant-numeric: tabular-nums;
++    }
++
++    :global(button:hover) {
++      background-color: var(--sui-hover-background-color);
++    }
++
++    :global(button.selected) {
++      color: var(--sui-highlight-foreground-color, #fff);
++      background-color: var(--sui-primary-accent-color);
++    }
++  }
++</style>
+diff --git a/src/lib/components/contents/details/fields/file/file-editor-item.svelte b/src/lib/components/contents/details/fields/file/file-editor-item.svelte
+index e7f523d..e1663a0 100644
+--- a/src/lib/components/contents/details/fields/file/file-editor-item.svelte
++++ b/src/lib/components/contents/details/fields/file/file-editor-item.svelte
+@@ -32,6 +32,12 @@
+    * @property {() => void} [onRemove] Event handler for remove action.
+    * @property {() => void} [onMoveUp] Event handler for move up action.
+    * @property {() => void} [onMoveDown] Event handler for move down action.
++   * @property {boolean} [dragging] Whether the item is currently being dragged for sorting.
++   * @property {boolean} [dropTarget] Whether the item is currently targeted as a drop position.
++   * @property {() => void} [onDragStart] Event handler fired when the item starts being dragged.
++   * @property {() => void} [onDragEnter] Event handler fired when a dragged item enters this item.
++   * @property {() => void} [onDragDrop] Event handler fired when a dragged item is dropped here.
++   * @property {() => void} [onDragEnd] Event handler fired when a drag operation ends.
+    */
+ 
+   /** @type {Props} */
+@@ -50,8 +56,19 @@
+     onRemove,
+     onMoveUp,
+     onMoveDown,
++    dragging = false,
++    dropTarget = false,
++    onDragStart,
++    onDragEnter,
++    onDragDrop,
++    onDragEnd,
+   } = $props();
+ 
++  /** Whether the item can be sorted via drag & drop. */
++  const sortable = $derived(!!(onMoveUp || onMoveDown) && !readonly && !!onDragStart);
++  /** Whether the drag handle is currently pressed, enabling the HTML5 drag behavior. */
++  let dragArmed = $state(false);
++
+   /** @type {Asset | undefined} */
+   let asset = $state();
+   /** @type {File | undefined} */
+@@ -152,10 +169,65 @@
+   });
+ </script>
+ 
+-<div role="none" class="filled">
++<div
++  role="none"
++  class="filled"
++  class:dragging
++  class:drop-target={dropTarget}
++  draggable={sortable && dragArmed}
++  ondragstart={(event) => {
++    if (!sortable || !dragArmed) {
++      event.preventDefault();
++
++      return;
++    }
++
++    if (event.dataTransfer) {
++      event.dataTransfer.effectAllowed = 'move';
++      // Set dummy data so dragging works in Firefox
++      event.dataTransfer.setData('text/plain', '');
++    }
++
++    onDragStart?.();
++  }}
++  ondragenter={(event) => {
++    event.preventDefault();
++    onDragEnter?.();
++  }}
++  ondragover={(event) => {
++    event.preventDefault();
++
++    if (event.dataTransfer) {
++      event.dataTransfer.dropEffect = 'move';
++    }
++  }}
++  ondrop={(event) => {
++    event.preventDefault();
++    dragArmed = false;
++    onDragDrop?.();
++  }}
++  ondragend={() => {
++    dragArmed = false;
++    onDragEnd?.();
++  }}
++>
+   {#if (onMoveUp || onMoveDown) && !readonly}
+-    <!-- @todo Support drag & drop sorting -->
+     <div role="toolbar" class="reorder-controls">
++      {#if sortable}
++        <span
++          role="none"
++          class="drag-handle"
++          title={_('drag_to_sort')}
++          onpointerdown={() => {
++            dragArmed = true;
++          }}
++          onpointerup={() => {
++            dragArmed = false;
++          }}
++        >
++          <Icon name="drag_indicator" />
++        </span>
++      {/if}
+       <Button
+         size="small"
+         iconic
+@@ -247,6 +319,27 @@
+     gap: 12px;
+     margin: var(--sui-focus-ring-width);
+ 
++    &.dragging {
++      opacity: 0.5;
++    }
++
++    &.drop-target {
++      box-shadow: 0 calc(var(--sui-focus-ring-width) * -1) 0 0 var(--sui-primary-accent-color);
++    }
++
++    :global(.drag-handle) {
++      display: flex;
++      align-items: center;
++      justify-content: center;
++      color: var(--sui-secondary-foreground-color);
++      cursor: grab;
++      touch-action: none;
++
++      &:active {
++        cursor: grabbing;
++      }
++    }
++
+     :global {
+       .preview {
+         flex: none;
+diff --git a/src/lib/components/contents/details/fields/file/file-editor.svelte b/src/lib/components/contents/details/fields/file/file-editor.svelte
+index d52bc7c..b6aa5cc 100644
+--- a/src/lib/components/contents/details/fields/file/file-editor.svelte
++++ b/src/lib/components/contents/details/fields/file/file-editor.svelte
+@@ -81,6 +81,10 @@
+   let pendingFiles = $state([]);
+   /** @type {Asset[]} */
+   let unsavedAssets = $state([]);
++  /** Index of the item currently being dragged for sorting, or `-1` if none. */
++  let draggingIndex = $state(-1);
++  /** Index of the item currently targeted as the drop position, or `-1` if none. */
++  let dropTargetIndex = $state(-1);
+ 
+   const {
+     widget: fieldType,
+@@ -316,6 +320,34 @@
+     ];
+   };
+ 
++  /**
++   * Move an item to an arbitrary position in the list. Used for drag & drop sorting.
++   * @param {number} fromIndex Index of the item to move.
++   * @param {number} toIndex Index of the new position.
++   */
++  const moveItem = (fromIndex, toIndex) => {
++    if (!$entryDraft || fromIndex === toIndex || !Array.isArray(currentValue)) {
++      return;
++    }
++
++    const values = [...currentValue];
++    const [moved] = values.splice(fromIndex, 1);
++
++    values.splice(toIndex, 0, moved);
++
++    values.forEach((value, index) => {
++      $entryDraft.currentValues[locale][`${keyPath}.${index}`] = value;
++    });
++  };
++
++  /**
++   * Reset the drag & drop sorting state.
++   */
++  const resetDragState = () => {
++    draggingIndex = -1;
++    dropTargetIndex = -1;
++  };
++
+   $effect(() => {
+     (async () => {
+       if ($entryDraft?.files) {
+@@ -353,6 +385,24 @@
+               {...itemArgs}
+               {value}
+               fieldId="{fieldId}-{index}"
++              dragging={draggingIndex === index}
++              dropTarget={dropTargetIndex === index && draggingIndex !== index}
++              onDragStart={() => {
++                draggingIndex = index;
++              }}
++              onDragEnter={() => {
++                if (draggingIndex > -1) {
++                  dropTargetIndex = index;
++                }
++              }}
++              onDragDrop={() => {
++                if (draggingIndex > -1) {
++                  moveItem(draggingIndex, index);
++                }
++
++                resetDragState();
++              }}
++              onDragEnd={resetDragState}
+               onReplace={() => {
+                 replaceMode = true;
+                 replaceIndex = index;
+diff --git a/src/lib/locales/en.yaml b/src/lib/locales/en.yaml
+index e367e7e..d120dfc 100644
+--- a/src/lib/locales/en.yaml
++++ b/src/lib/locales/en.yaml
+@@ -635,6 +635,7 @@ map_lat_lng: Map showing latitude {$latitude}, longitude {$longitude}
+ remove_this_item: Remove This Item
+ move_up: Move Up
+ move_down: Move Down
++drag_to_sort: Drag to Sort
+ add_x: Add {$name}
+ add_item_above: Add Item Above
+ add_item_below: Add Item Below
+@@ -690,6 +691,15 @@ character_counter:
+ youtube_video_player: YouTube video player
+ today: Today
+ now: Now
++date_picker:
++  select_date: Select Date
++  select_time: Select Time
++  previous_month: Previous Month
++  next_month: Next Month
++  previous_year: Previous Year
++  next_year: Next Year
++  hour: Hour
++  minute: Minute
+ editor_components:
+   image: Image
+   src: Source
+diff --git a/src/lib/locales/ja.yaml b/src/lib/locales/ja.yaml
+index a2773b3..8b7e279 100644
+--- a/src/lib/locales/ja.yaml
++++ b/src/lib/locales/ja.yaml
+@@ -537,6 +537,7 @@ map_lat_lng: 緯度 {$latitude}、経度 {$longitude} の地図
+ remove_this_item: このアイテムを削除
+ move_up: 上へ移動
+ move_down: 下へ移動
++drag_to_sort: ドラッグして並べ替え
+ add_x: "{$name} を追加"
+ add_item_above: 上にアイテムを追加
+ add_item_below: 下にアイテムを追加
+@@ -589,6 +590,15 @@ character_counter:
+ youtube_video_player: YouTube 動画プレーヤー
+ today: 今日
+ now: 現在時刻
++date_picker:
++  select_date: 日付を選択
++  select_time: 時刻を選択
++  previous_month: 前の月
++  next_month: 次の月
++  previous_year: 前の年
++  next_year: 次の年
++  hour: 時
++  minute: 分
+ editor_components:
+   image: 画像
+   src: ソース
