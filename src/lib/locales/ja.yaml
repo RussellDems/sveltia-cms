@@ -599,6 +599,8 @@ date_picker:
   next_year: 次の年
   hour: 時
   minute: 分
+  am: 午前
+  pm: 午後
 editor_components:
   image: 画像
   src: ソース

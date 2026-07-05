@@ -700,6 +700,8 @@ date_picker:
   next_year: Next Year
   hour: Hour
   minute: Minute
+  am: AM
+  pm: PM
 editor_components:
   image: Image
   src: Source
